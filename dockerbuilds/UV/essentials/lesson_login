@@ -1,0 +1,85 @@
+#!/bin/bash
+#
+### Set lesson based on LESSON_ACCOUNT
+#
+  lesson_accounts=`cat /usr/uv/LESSON_ACCOUNT`
+  printf "This Docker contains $lesson_accounts\n"
+  set -- $lesson_accounts
+  main_account=$1
+#
+### if root user, start processes
+#
+  if [ "$(id -u)" -eq 0 ];then
+#
+### Start UniVerse
+#
+    export U2_DAP_PORT_RANGE=50000-50010
+    /usr/uv/bin/uv -admin -start
+#
+### Check if telnet is up, and if not, start it
+#
+    telnetup=`ps -ef | grep telnetd | grep -v -e grep`
+    if [ -z "$telnetup" ]; then
+      echo 'Starting telnet process'
+      busybox telnetd -p 23 -l /bin/login &
+    else
+      echo 'telnet is up'
+    fi
+#
+### If no external volume as /mystuff, create /mystuff directory
+#
+    if [ ! -d /mystuff ]; then
+      printf "Creating internal mystuff directory"
+      mkdir -m777 /mystuff
+      printf "\nThe $main_account account will not remain when docker run is complete.\n"
+      echo -e "\e[7m⚠ CHANGES TO the $main_account WILL BE LOST WHEN THIS CONTAINER EXITS!\e[0m"
+      printf "\nIf you want to keep your own copy of the $main_account you must run docker with -v option\n"
+    fi
+#
+### Change directory to /mystuff regardless of origin
+#
+    printf "Changing to /mystuff directory\n"
+    cd /mystuff
+#
+### Create environment if needed -- first time
+#
+    if [ ! -d "/mystuff/$main_account" ]; then
+      printf "Loading accounts for the lesson\n"
+      tar -xzpf /usr/uv/lesson.tar.gz 2> /dev/null
+    fi
+#
+### Always change permissions and ownership if set to 12000:12000
+#
+    printf "Adjusting permissions and ownership for the accounts\n"
+    find /mystuff -uid 12000 -gid 12000 \
+     -exec chown uvadm:uv {} + \
+     -exec chmod 777 {} +
+#
+### Login as uvdb to the docker accounts so that UV.ACCOUNT gets updated
+#
+    for acct in $lesson_accounts; do
+      su - uvdb -c "cd /mystuff/$acct && printf 'quit\n' | /usr/uv/bin/uv" > /dev/null 2>&1
+    done
+#
+### start UniVerse session by switching to user1
+#
+    real_host=`hostname | grep "uv"`
+    if [ -z "$real_host" ]; then
+      echo "Running as root, changing to user user1"
+      su - user1
+    else
+#
+### Or sleep because this is a container within a compose file
+#
+      sleep 366000
+    fi
+  else
+    printf "Setting umask to 002\n"
+    umask 002
+    printf "Changing backspace\n"
+    stty erase ^h
+    echo "Changing to account directory $main_account"
+    cd /mystuff/$main_account
+    echo "Running UniVerse session"
+    /usr/uv/bin/uv
+  fi
