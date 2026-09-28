@@ -1,0 +1,15 @@
+# Use this file to add users and/or groups to the docker image
+# specify as user:group
+# The user will always be created with the primary group as follows:
+#     UniVerse docker will be uv
+#     jBASE docker will be jbase
+#     UniData docker will be ud
+#
+# You can also just specify user as user: or just specify a new group as :group
+#
+# user3:payroll   would supplement the user3 user with additional group payroll
+#                 (since user1, user2 and user3 are always created primary group as above.)
+# amycli:         would add amycli with primary group as above
+# :payroll        would just add the group payroll
+#
+# Add as you want below
