@@ -1,0 +1,13 @@
+/tmp/udinstall/bin.tar
+Yes
+/usr/ud83
+/usr/ud83/bin
+Yes
+/usr/ud83/work
+/usr/ud83/lib
+/usr/unishared
+ud
+Yes
+No
+No
+Yes
