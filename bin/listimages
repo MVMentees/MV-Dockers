@@ -1,0 +1,57 @@
+#!/bin/bash
+
+docker image prune -f >/dev/null 2>&1
+
+declare -a IMAGE_IDS
+declare -a IMAGE_NAMES
+
+count=0
+
+echo
+echo "Running Docker Images:"
+echo "------------------------"
+
+while IFS=$'\t' read -r image id; do
+	created=$(docker inspect -f '{{.Created}}' "$id" 2>/dev/null | sed 's/ UTC$//')
+	if [ "$(date -d "$created" +%s)" -ge "$(date -d '30 days ago' +%s)" ]; then
+
+        if [[ "$image" != *none* && "$image" != ams-* ]]; then
+            count=$((count + 1))
+
+            IMAGE_IDS[$count]="$id"
+            IMAGE_NAMES[$count]="$image"
+
+            printf "%3d) %-60s %s\n" \
+                "$count" \
+                "$image" \
+                "$(date -d "$created" '+%Y-%m-%d %H:%M')"
+        fi
+    fi
+done < <(docker images --format "{{.Repository}}:{{.Tag}}\t{{.ID}}")
+
+echo
+
+if [ "$count" -eq 0 ]; then
+    echo "No matching images found."
+    exit 0
+fi
+
+read -rp "Enter image number(s) to remove (e.g. 1 3 5) or ALL: " selection
+
+if [[ "${selection^^}" == "ALL" ]]; then
+    echo
+    echo "Removing all listed images..."
+    for i in $(seq 1 "$count"); do
+        echo "Removing ${IMAGE_NAMES[$i]}"
+        docker rmi "${IMAGE_IDS[$i]}"
+    done
+else
+    for idx in $selection; do
+        if [[ "$idx" =~ ^[0-9]+$ ]] && [ "$idx" -ge 1 ] && [ "$idx" -le "$count" ]; then
+            echo "Removing ${IMAGE_NAMES[$idx]}"
+            docker rmi -f "${IMAGE_IDS[$idx]}"
+        else
+            echo "Invalid selection: $idx"
+        fi
+    done
+fi
