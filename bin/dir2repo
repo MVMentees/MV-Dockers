@@ -4,7 +4,7 @@ set -euo pipefail
 if [ $# -ne 1 ]; then
     echo "Usage: $(basename "$0") <directory>"
     printf "\nMoves dir from PBD/PICKLE account to repo and puts\n"
-    printf "a symbolic link in the account directory"
+    printf "a symbolic link in the account directory\n\n"
     exit 1
 fi
 
