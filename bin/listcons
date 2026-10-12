@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+
+echo "Searching for containers with commands starting with /opt/jbase or /usr/u..."
+echo
+
+#
+# Format Docker port mappings:
+#   - Remove IPv6 entries ([::]...)
+#   - Remove 0.0.0.0: prefix from IPv4 entries
+#
+format_ports() {
+    echo "$1" |
+    awk -F', ' '
+    {
+        out = ""
+
+        for (i = 1; i <= NF; i++) {
+            if ($i !~ /^\[::\]/) {
+                gsub(/^0\.0\.0\.0:/, "", $i)
+
+                if (length($i) > 0) {
+                    out = out (out ? ", " : "") $i
+                }
+            }
+        }
+
+        print out
+    }'
+}
+
+#
+# Find matching containers
+#
+mapfile -t CONTAINERS < <(
+    docker ps -a --format '{{.ID}}|{{.Names}}|{{.Image}}|{{.Ports}}|{{.Command}}' |
+    awk -F'|' '
+        $5 ~ /^"\/opt\/jbase/ || $5 ~ /^"\/usr\/u/ {
+            print $0
+        }
+    '
+)
+
+if [ ${#CONTAINERS[@]} -eq 0 ]; then
+    echo "No matching containers found."
+    exit 0
+fi
+
+printf "%-4s %-12s %-25s %-30s %-55s\n" \
+    "#" "ID" "NAME" "IMAGE" "PORTS"
+
+printf "%-4s %-12s %-25s %-30s %-55s\n" \
+    "---" "------------" \
+    "-------------------------" \
+    "------------------------------" \
+    "-------------------------------------------------------"
+
+for i in "${!CONTAINERS[@]}"; do
+    IFS='|' read -r ID NAME IMAGE PORTS CMD <<< "${CONTAINERS[$i]}"
+
+    PORTS=$(format_ports "$PORTS")
+
+    printf "%-4s %-12.12s %-25.25s %-30.30s %-55.55s\n" \
+        "$((i+1))" "$ID" "$NAME" "$IMAGE" "$PORTS"
+done
+
+echo
+read -rp "Enter container number(s) to remove (e.g. 1 3 5) or ALL: " selection
+
+#
+# Remove all selected containers
+#
+if [[ "${selection^^}" == "ALL" ]]; then
+    echo
+    read -rp "Remove ALL listed containers? (y/N): " answer
+
+    if [[ "$answer" =~ ^[Yy]$ ]]; then
+        echo
+
+        for entry in "${CONTAINERS[@]}"; do
+            IFS='|' read -r ID NAME IMAGE PORTS CMD <<< "$entry"
+
+            echo "Removing $NAME ($ID)..."
+            docker rm -f "$ID"
+        done
+    else
+        echo "Aborted."
+    fi
+
+    exit 0
+fi
+
+#
+# Build list of selected containers
+#
+TO_REMOVE=()
+
+for num in $selection; do
+    if ! [[ "$num" =~ ^[0-9]+$ ]]; then
+        echo "Invalid selection: $num"
+        exit 1
+    fi
+
+    index=$((num - 1))
+
+    if (( index < 0 || index >= ${#CONTAINERS[@]} )); then
+        echo "Selection out of range: $num"
+        exit 1
+    fi
+
+    TO_REMOVE+=("${CONTAINERS[$index]}")
+done
+
+if [ ${#TO_REMOVE[@]} -eq 0 ]; then
+    echo "No containers selected."
+    exit 0
+fi
+
+echo
+echo "The following containers will be removed:"
+echo
+
+printf "%-25s %-55s %s\n" "NAME" "PORTS" "ID"
+
+printf "%-25s %-55s %s\n" \
+    "-------------------------" \
+    "-------------------------------------------------------" \
+    "------------"
+
+for entry in "${TO_REMOVE[@]}"; do
+    IFS='|' read -r ID NAME IMAGE PORTS CMD <<< "$entry"
+
+    PORTS=$(format_ports "$PORTS")
+
+    printf "%-25.25s %-55.55s %s\n" \
+        "$NAME" "$PORTS" "$ID"
+done
+
+echo
+read -rp "Continue? (y/N): " answer
+
+if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+    echo "Aborted."
+    exit 0
+fi
+
+echo
+
+for entry in "${TO_REMOVE[@]}"; do
+    IFS='|' read -r ID NAME IMAGE PORTS CMD <<< "$entry"
+
+    echo "Removing $NAME ($ID)..."
+    docker rm -f "$ID"
+done
+
+echo
+echo "Completed."
